@@ -1,1 +1,0 @@
-'p_deltaPhiRescaled2', 'p_ptconecoreTrackPtrCorrection', 'p_d0', 'p_Rphi', 'p_sigmad0', 'p_deltaEta1', 'p_dPOverP', 'p_d0Sig', 'p_Reta', 'p_deltaPhiFromLastMeasurement', 'p_deltaPhi2', 'p_EptRatio', 'p_pt_track', 'p_deltaEta2', 'p_qOverP'
