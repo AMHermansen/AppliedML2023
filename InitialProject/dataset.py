@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, random_split
 import h5py
 import pandas as pd
 import numpy as np
@@ -7,10 +7,10 @@ import numpy as np
 
 class ParticleDataset(Dataset):
     def __init__(self, path="/home/amh/Documents/coding/GitHub/AppliedML2023/data/initial/train",
-                 variables_path="/home/amh/Documents/coding/GitHub/AppliedML2023/data/initial/variable.txt",
+                 variables_path="/home/amh/Documents/coding/GitHub/AppliedML2023/data/initial/classification_variables.txt",
                  target="Truth"):
         with h5py.File(f"{path}.h5", "r") as f:
-            data = pd.DataFrame(f[path.split('/')[-1]][:], dtype=np.float64)
+            data = pd.DataFrame(f[path.split('/')[-1]][:], dtype=np.float32)
 
         with open(variables_path, "r") as f:
             self.variables = f.read()
@@ -26,13 +26,17 @@ class ParticleDataset(Dataset):
         np.nan_to_num(self.features, copy=False, nan=0.0, posinf=10.0, neginf=10.0)
 
         self.features = torch.from_numpy(self.features)
-        self.target = torch.from_numpy(self.target)
+        self.target = torch.Tensor(self.target)
 
     def __getitem__(self, item):
         return self.features[item, :], self.target[item]
 
     def __len__(self):
         return len(self.target)
+
+    def split_data(self, train_fraction, seed=42):
+        train_size = int(train_fraction * len(self))
+        return random_split(self, [train_size, len(self) - train_size], generator=torch.Generator().manual_seed(seed))
 
 
 def main():

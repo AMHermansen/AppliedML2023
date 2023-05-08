@@ -1,8 +1,10 @@
 import torch
 from torch import nn
 from torch import optim
+from torch.utils.data import DataLoader
 from torch.nn import functional as F
 import lightning as L
+from dataset import ParticleDataset
 
 
 class FullyConnectedBlock(nn.Module):
@@ -49,13 +51,13 @@ class FullyConnectedModel(nn.Module):
             )
 
     def forward(self, x):
-        return self.decoder(self.encoder(x))
+        return self.decoder(self.encoder(x))[:, 0]
 
 
 class LightningFullyConnected(L.LightningModule):
     def __init__(self, in_channels, out_channels, hidden_channels, decode_channels, hidden_layers,
                  p_dropout, activation=nn.LeakyReLU, final_activation=None,
-                 lr=0.0003, optimizer=optim.AdamW, scheduler=optim.lr_scheduler.CosineAnnealingLR,
+                 lr=0.0003, batch_size=2500, optimizer=optim.AdamW, scheduler=optim.lr_scheduler.CosineAnnealingLR,
                  loss_fn=F.binary_cross_entropy):
         super().__init__()
         self.model = FullyConnectedModel(in_channels, out_channels, hidden_channels, decode_channels,
@@ -66,7 +68,8 @@ class LightningFullyConnected(L.LightningModule):
         self.lr = lr
         self.optimizer = optimizer
         self.scheduler = scheduler
-
+        self.batch_size = batch_size
+        self.train_data, self.valid_data = ParticleDataset().split_data(0.8)
 
     def forward(self, x):
         return self.model(x)
@@ -74,7 +77,9 @@ class LightningFullyConnected(L.LightningModule):
     def training_step(self, batch, batch_idx):
         features, target = batch
         target_pred = self.model(features)
-        return self.loss_fn(target_pred, target)
+        loss = self.loss_fn(target_pred, target)
+        self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        return loss
 
     def validation_step(self, batch, batch_idx):
         features, target = batch
@@ -82,12 +87,19 @@ class LightningFullyConnected(L.LightningModule):
         val_loss = self.loss_fn(target_pred, target)
         self._val_total += len(target)
         self._val_correct += torch.sum(torch.round(target_pred) == target)
-        self.log("val_loss", val_loss)
+        self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True)
+        return val_loss
 
     def on_validation_epoch_end(self):
         val_accuracy = self._val_correct / self._val_total
-        self.log("val_acc", val_accuracy)
+        self.log("val_acc", val_accuracy, on_step=False, on_epoch=True, prog_bar=True)
         self._reset_count()
+
+    def train_dataloader(self):
+        return DataLoader(self.train_data, num_workers=8, shuffle=True, batch_size=self.batch_size)
+
+    def val_dataloader(self):
+        return DataLoader(self.valid_data, num_workers=8, shuffle=False, batch_size=self.batch_size)
 
     def configure_optimizers(self):
         optimizer = self.optimizer(self.parameters(), lr=self.lr)
