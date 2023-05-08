@@ -1,4 +1,5 @@
 # Git ignore file
 /data/
 /Week1/*/
+/.idea/
 
