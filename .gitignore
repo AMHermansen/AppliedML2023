@@ -1,0 +1,4 @@
+# Git ignore file
+/data/
+/Week1/*/
+
