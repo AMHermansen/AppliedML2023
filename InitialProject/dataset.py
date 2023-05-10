@@ -6,9 +6,14 @@ import numpy as np
 
 
 class ParticleDataset(Dataset):
-    def __init__(self, path="/home/amh/Documents/coding/GitHub/AppliedML2023/data/initial/train",
+    def __init__(self, path="/home/amh/Documents/Coding/GitHub/AppliedML2023/data/initial/train",
                  variables_path="/home/amh/Documents/coding/GitHub/AppliedML2023/data/initial/classification_variables.txt",
                  target="Truth"):
+        if target == "ALL":
+            with open("/home/amh/Documents/coding/GitHub/AppliedML2023/data/initial/variables.txt", "r") as f:
+                target = f.read()
+            target = target.replace("\n", "").replace("'", "").split(",")
+
         with h5py.File(f"{path}.h5", "r") as f:
             data = pd.DataFrame(f[path.split('/')[-1]][:], dtype=np.float32)
 
