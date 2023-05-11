@@ -1,5 +1,7 @@
+from typing import Tuple, List
+
 import torch
-from torch.utils.data import Dataset, random_split
+from torch.utils.data import Dataset, random_split, Subset
 import h5py
 import pandas as pd
 import numpy as np
@@ -23,7 +25,6 @@ class ParticleDataset(Dataset):
         with open(variables_path, "r") as f:
             self.variables = f.read()
 
-
         self.variables = self.variables.replace("\n", "").replace(" ", "").replace("'", "")
         self.variables = self.variables.split(",")
 
@@ -38,22 +39,33 @@ class ParticleDataset(Dataset):
 
         self.features = torch.from_numpy(self.features)
         self.target = torch.Tensor(self.target)
+        self._use_2d_getitem_dispatcher = isinstance(self.target_variables, list)
+
+    def __getitem__(self, item) -> Tuple[torch.Tensor, torch.Tensor]:
+        if self._use_2d_getitem_dispatcher:
+            return self._get_item2d(item)
+        else:
+            return self._get_item1d(item)
+
+    def __len__(self) -> int:
+        return len(self.target)
+
+    def split_data(self, train_fraction, seed=42) -> List[Subset[Dataset]]:
+        train_size = int(train_fraction * len(self))
+        return random_split(self, [train_size, len(self) - train_size],
+                            generator=torch.Generator().manual_seed(seed))
 
     @staticmethod
-    def _normalize(features):
+    def _normalize(features: np.ndarray) -> np.ndarray:
         out = (features - np.mean(features, axis=0)) / np.std(features, axis=0, ddof=1)
         np.nan_to_num(out, copy=False, nan=0.0, posinf=10.0, neginf=10.0)
         return out
 
-    def __getitem__(self, item):
+    def _get_item1d(self, item) -> Tuple[torch.Tensor, torch.Tensor]:
         return self.features[item, :], self.target[item]
 
-    def __len__(self):
-        return len(self.target)
-
-    def split_data(self, train_fraction, seed=42):
-        train_size = int(train_fraction * len(self))
-        return random_split(self, [train_size, len(self) - train_size], generator=torch.Generator().manual_seed(seed))
+    def _get_item2d(self, item) -> Tuple[torch.Tensor, torch.Tensor]:
+        return self.features[item, :], self.target[item, :]
 
 
 def main():

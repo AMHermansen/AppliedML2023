@@ -51,7 +51,7 @@ class FullyConnectedModel(nn.Module):
             )
 
     def forward(self, x):
-        return self.decoder(self.encoder(x))[:, 0]
+        return self.decoder(self.encoder(x))
 
 
 class LightningFullyConnected(L.LightningModule):
@@ -69,21 +69,21 @@ class LightningFullyConnected(L.LightningModule):
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.batch_size = batch_size
-        self.train_data, self.valid_data = ParticleDataset().split_data(0.8)
+        self.save_hyperparameters()
 
     def forward(self, x):
         return self.model(x)
 
     def training_step(self, batch, batch_idx):
         features, target = batch
-        target_pred = self.model(features)
+        target_pred = self.model(features)[:, 0]
         loss = self.loss_fn(target_pred, target)
         self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         features, target = batch
-        target_pred = self.model(features)
+        target_pred = self.model(features)[:, 0]
         val_loss = self.loss_fn(target_pred, target)
         self._val_total += len(target)
         self._val_correct += torch.sum(torch.round(target_pred) == target)
@@ -92,7 +92,7 @@ class LightningFullyConnected(L.LightningModule):
 
     def on_validation_epoch_end(self):
         val_accuracy = self._val_correct / self._val_total
-        self.log("val_acc", val_accuracy, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val_acc", val_accuracy, on_step=False, on_epoch=True, prog_bar=False)
         self._reset_count()
 
     def train_dataloader(self):
@@ -109,3 +109,39 @@ class LightningFullyConnected(L.LightningModule):
     def _reset_count(self):
         self._val_correct = 0
         self._val_total = 0
+
+
+class BigLightningModel(LightningFullyConnected):
+    out_size = 160
+
+    def __init__(self, in_channels, out_channels, hidden_channels, decode_channels, hidden_layers,
+                 p_dropout, activation=nn.LeakyReLU, final_activation=None,
+                 lr=0.0003, batch_size=2500, optimizer=optim.AdamW, scheduler=optim.lr_scheduler.CosineAnnealingLR,
+                 loss_fn=F.mse_loss):
+        super().__init__(in_channels, out_channels, hidden_channels, decode_channels,
+                         hidden_layers, p_dropout, activation, final_activation,
+                         lr, batch_size, optimizer, scheduler, loss_fn)
+
+    def forward(self, x):
+        out = self.model(x)
+        return self.model(x)
+
+    def training_step(self, batch, batch_idx):
+        features, target = batch
+        target_pred = self(features)
+        loss = self.loss_fn(target_pred, target)
+        self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        features, target = batch
+        target_pred = self.forward(features)
+        val_loss = self.loss_fn(target_pred, target)
+        self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True)
+        return val_loss
+
+    def _reset_count(self):
+        pass
+
+    def on_validation_epoch_end(self):
+        pass
