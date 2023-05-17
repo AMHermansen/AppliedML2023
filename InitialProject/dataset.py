@@ -7,13 +7,15 @@ import pandas as pd
 import numpy as np
 
 
-class ParticleDataset(Dataset):
-    def __init__(self, path="/home/amh/Documents/Coding/GitHub/AppliedML2023/data/initial/train",
-                 variables_path="/home/amh/Documents/Coding/GitHub/AppliedML2023/data/initial/classification_variables.txt",
-                 target="Truth"):
+APP_ML_PATH = "/home/andreas/Documents/Coding/GitHub/AppliedML2023"
 
+
+class ParticleDataset(Dataset):
+    def __init__(self, path=f"{APP_ML_PATH}/data/initial/train",
+                 variables_path=f"{APP_ML_PATH}/data/initial/classification_variables.txt",
+                 target="Truth"):
         if target == "ALL":
-            with open("/home/amh/Documents/Coding/GitHub/AppliedML2023/data/initial/variables.txt", "r") as f:
+            with open(f"{APP_ML_PATH}/data/initial/variables.txt", "r") as f:
                 self.target_variables = f.read()
             self.target_variables = self.target_variables.replace("\n", "").replace("'", "").replace(" ", "").split(",")
         else:
@@ -68,10 +70,34 @@ class ParticleDataset(Dataset):
         return self.features[item, :], self.target[item, :]
 
 
+class AEDataset(ParticleDataset):
+    def __init__(
+            self,
+            path=f"{APP_ML_PATH}/data/initial/train",
+            variables_path=f"{APP_ML_PATH}/data/initial/variables.txt",
+    ):
+        super().__init__(path=path,
+                         variables_path=variables_path,
+                         target="ALL")
+        self.target = self.variables
+
+    def __getitem__(self, item):
+        return self.features[item, :]
+
+    def __len__(self):
+        return len(self.features)
+
+
 def main():
-    d = ParticleDataset(target="ALL")
-    print(d[42])
-    print(d.features.shape)
+    # d = ParticleDataset(target="ALL")
+    dae = AEDataset(
+        path=f"{APP_ML_PATH}/data/initial/test",
+        variables_path=f"{APP_ML_PATH}/data/initial/variables.txt",
+    )
+    # print(d[42])
+    # print(d.features.shape)
+    print(dae[42])
+    print(len(dae))
 
 
 if __name__ == "__main__":
