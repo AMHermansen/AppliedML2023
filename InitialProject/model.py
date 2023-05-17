@@ -1,3 +1,5 @@
+from typing import Any
+
 import torch
 from torch import nn
 from torch import optim
@@ -8,16 +10,24 @@ from dataset import ParticleDataset
 
 
 class FullyConnectedBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, p_dropout, activation=nn.LeakyReLU, skip_connection=True):
+    def __init__(self, in_channels, out_channels, p_dropout,
+                 activation=nn.LeakyReLU, skip_connection=True, use_batch_norm=False):
         if (in_channels != out_channels) and skip_connection:
             raise ValueError("In and out channels must be identical to use skip connections")
         super().__init__()
-
-        self.model = nn.Sequential(
-            nn.Linear(in_channels, out_channels),
-            nn.Dropout(p_dropout),
-            activation(),
-        )
+        if use_batch_norm:
+            self.model = nn.Sequential(
+                nn.Linear(in_channels, out_channels),
+                nn.Dropout(p_dropout),
+                activation(),
+                nn.BatchNorm1d(num_features=out_channels),
+            )
+        else:
+            self.model = nn.Sequential(
+                nn.Linear(in_channels, out_channels),
+                nn.Dropout(p_dropout),
+                activation(),
+            )
         self.skip_connection = skip_connection
 
     def forward(self, x):
@@ -49,6 +59,53 @@ class FullyConnectedModel(nn.Module):
                 used_activation,
                 nn.Linear(decode_channels, out_channels),
             )
+
+    def forward(self, x):
+        return self.decoder(self.encoder(x))
+
+
+class Encoder(nn.Module):
+    def __init__(self, layer_shape, p_dropout=0.1,
+                 activation=nn.LeakyReLU, use_batch_norm=False):
+        super().__init__()
+        layers = [
+            FullyConnectedBlock(in_layer_size, out_layer_size, p_dropout=p_dropout,
+                                skip_connection=False,
+                                activation=activation,
+                                use_batch_norm=use_batch_norm)
+            for in_layer_size, out_layer_size in zip(layer_shape[:-1], layer_shape[1:])]
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.model(x)
+
+
+class Decoder(nn.Module):
+    def __init__(self, layer_shape, p_dropout=0.1,
+                 activation=nn.LeakyReLU, use_batch_norm=False):
+        super().__init__()
+        layers = [
+            FullyConnectedBlock(in_layer_size, out_layer_size, p_dropout=p_dropout,
+                                skip_connection=False,
+                                activation=activation,
+                                use_batch_norm=use_batch_norm)
+            for in_layer_size, out_layer_size
+            in zip(layer_shape[:-2], layer_shape[1:-1])]
+        layers.append(nn.Linear(layer_shape[-2], layer_shape[-1]))
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.model(x)
+
+
+class FullAutoEncoder(nn.Module):
+    def __init__(self, layer_shape, p_dropout=0.1,
+                 activation=nn.LeakyReLU,
+                 use_batch_norm=True):
+        super().__init__()
+        self.latent_dimension = layer_shape[-1]
+        self.encoder = Encoder(layer_shape, p_dropout, activation, use_batch_norm)
+        self.decoder = Decoder(layer_shape[::-1], p_dropout, activation, use_batch_norm)
 
     def forward(self, x):
         return self.decoder(self.encoder(x))
@@ -144,4 +201,40 @@ class BigLightningModel(LightningFullyConnected):
         pass
 
     def on_validation_epoch_end(self):
-        return L.LightningModule.on_validation_epoch_end(self)
+        pass
+
+
+class LitAutoEncoder(L.LightningModule):
+    def __init__(self, layer_shape, p_dropout,
+                 activation=nn.LeakyReLU, use_batch_norm=False,
+                 lr=0.0003, optimizer=optim.AdamW, scheduler=optim.lr_scheduler.CosineAnnealingLR,
+                 loss_fn=F.mse_loss):
+        super().__init__()
+        self.model = FullAutoEncoder(layer_shape, p_dropout, activation, use_batch_norm)
+        self.loss_fn = loss_fn
+        self.lr = lr
+        self.optimizer = optimizer
+        self.scheduler = scheduler
+        self.save_hyperparameters()
+
+    def forward(self, x):
+        return self.model(x)
+
+    def training_step(self, batch, batch_idx):
+        features = batch
+        features_pred = self(features)
+        loss = self.loss_fn(features, features_pred)
+        self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        features = batch
+        features_pred = self(features)
+        val_loss = self.loss_fn(features, features_pred)
+        self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True)
+        return val_loss
+
+    def configure_optimizers(self):
+        optimizer = self.optimizer(self.parameters(), lr=self.lr)
+        lr_scheduler = self.scheduler(optimizer, T_max=10)
+        return [optimizer], [{"scheduler": lr_scheduler}]
