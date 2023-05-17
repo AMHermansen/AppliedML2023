@@ -144,4 +144,4 @@ class BigLightningModel(LightningFullyConnected):
         pass
 
     def on_validation_epoch_end(self):
-        pass
+        return L.LightningModule.on_validation_epoch_end(self)
