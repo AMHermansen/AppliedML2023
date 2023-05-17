@@ -3,6 +3,7 @@
 /Week1/*/
 /.idea/
 /venv/
+/Week*/*.pkl
 
 # Logging from lightning_logs
 /lightning_logs/
