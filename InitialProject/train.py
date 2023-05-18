@@ -29,18 +29,20 @@ def single_run(
         use_wandb=True,
         used_model=LightningFullyConnected,
         final_save=None,
+        num_workers=8, devices=1, max_epochs=1000, patience=10, refresh_rate=10,
+        dataset=ParticleDataset,
         **kwargs
 ):
     model = used_model(in_channels, out_channels, hidden_channels, decode_channels, hidden_layers,
                                     p_dropout, activation, final_activation, lr, batch_size, optimizer, scheduler, loss_fn)
-    train_data, val_data = ParticleDataset(**kwargs).split_data(0.8)
-    train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=8)
-    val_dataloader = DataLoader(val_data, batch_size=batch_size, shuffle=False, num_workers=8)
+    train_data, val_data = dataset(**kwargs).split_data(0.8)
+    train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    val_dataloader = DataLoader(val_data, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
-    trainer = L.Trainer(devices=1, accelerator="gpu",
-                        max_epochs=1000,
-                        callbacks=[EarlyStopping(monitor="val_loss", mode="min", patience=10),
-                                   TQDMProgressBar(refresh_rate=10)],
+    trainer = L.Trainer(devices=devices, accelerator="gpu",
+                        max_epochs=max_epochs,
+                        callbacks=[EarlyStopping(monitor="val_loss", mode="min", patience=patience),
+                                   TQDMProgressBar(refresh_rate=refresh_rate)],
                         )
     trainer.fit(model=model,
                 train_dataloaders=train_dataloader,
@@ -50,11 +52,11 @@ def single_run(
 
 
 def model1_run():
-    hidden_channels = 20
+    hidden_channels = 40
     decode_channels = 6
-    hidden_layers = 10
+    hidden_layers = 20
     p_dropout = 0.1
-    lr = 0.0005
+    lr = 0.0003
     single_run(hidden_channels, decode_channels, hidden_layers, p_dropout, lr,
                final_save="data/initial/model1.ckpt")
 
@@ -73,11 +75,11 @@ def model2_run():
 
 
 def ae_run(**kwargs):
-    layer_shape = [160, 80, 40, 20, 10]
+    layer_shape = [160, 80, 40, 20, 15]
     p_dropout = 0.1
     use_batch_norm = True
     batch_size = 2500
-    num_workers = 2
+    num_workers = 8
     final_save = "data/initial/ae_full.ckpt"
 
     model = LitAutoEncoder(layer_shape, p_dropout, use_batch_norm=use_batch_norm)
@@ -91,7 +93,7 @@ def ae_run(**kwargs):
     print(len(val_data))
     print(len(train_data) // batch_size)
 
-    trainer = L.Trainer(devices=2, accelerator="cpu",
+    trainer = L.Trainer(devices=1, accelerator="gpu",
                         max_epochs=1000,
                         callbacks=[
                             EarlyStopping(monitor="val_loss", mode="min", patience=10),

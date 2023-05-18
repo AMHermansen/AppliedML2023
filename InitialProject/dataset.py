@@ -7,11 +7,12 @@ import pandas as pd
 import numpy as np
 
 
-APP_ML_PATH = "/home/andreas/Documents/Coding/GitHub/AppliedML2023"
+APP_ML_PATH = "/home/amh/Documents/Coding/GitHub/AppliedML2023"
 
 
 class ParticleDataset(Dataset):
-    def __init__(self, path=f"{APP_ML_PATH}/data/initial/train",
+    def __init__(self,
+                 path=f"{APP_ML_PATH}/data/initial/train",
                  variables_path=f"{APP_ML_PATH}/data/initial/classification_variables.txt",
                  target="Truth"):
         if target == "ALL":
@@ -42,6 +43,7 @@ class ParticleDataset(Dataset):
         self.features = torch.from_numpy(self.features)
         self.target = torch.Tensor(self.target)
         self._use_2d_getitem_dispatcher = isinstance(self.target_variables, list)
+        self._all_data = data
 
     def __getitem__(self, item) -> Tuple[torch.Tensor, torch.Tensor]:
         if self._use_2d_getitem_dispatcher:
@@ -59,7 +61,7 @@ class ParticleDataset(Dataset):
 
     @staticmethod
     def _normalize(features: np.ndarray) -> np.ndarray:
-        out = (features - np.mean(features, axis=0)) / np.std(features, axis=0, ddof=1)
+        out = (features - np.mean(features, axis=0)) / (2 * np.std(features, axis=0, ddof=1))
         np.nan_to_num(out, copy=False, nan=0.0, posinf=10.0, neginf=10.0)
         return out
 
@@ -88,16 +90,40 @@ class AEDataset(ParticleDataset):
         return len(self.features)
 
 
+class EnergyDataset(ParticleDataset):
+    _electron_label = "Truth"
+    _energy_label = "p_truth_E"
+
+    def __init__(self,
+                 path=f"{APP_ML_PATH}/data/initial/train",
+                 variables_path=f"{APP_ML_PATH}/data/initial/variables.txt",
+                 target=_energy_label):
+        super().__init__(path, variables_path, target)
+        is_electron = self._all_data[self._electron_label]
+        self.features = self.features[is_electron == 1]
+        self.target = self.target[is_electron == 1].numpy()
+        self._m = np.mean(self.target)
+        self._s = 2 * np.std(self.target)
+        self.target = (self.target - np.mean(self.target)) / (2 * np.std(self.target))
+        self.target = torch.from_numpy(self.target)
+
+    def reverse_transform(self, x):
+        return x * self._s + self._m
+
+
 def main():
-    # d = ParticleDataset(target="ALL")
+    d = ParticleDataset(target="ALL")
     dae = AEDataset(
         path=f"{APP_ML_PATH}/data/initial/test",
         variables_path=f"{APP_ML_PATH}/data/initial/variables.txt",
     )
-    # print(d[42])
-    # print(d.features.shape)
+    e = EnergyDataset()
+    print(d[42])
+    print(d.features.shape)
     print(dae[42])
     print(len(dae))
+    print(e[42])
+    print(len(e))
 
 
 if __name__ == "__main__":

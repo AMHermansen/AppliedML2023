@@ -149,7 +149,7 @@ class LightningFullyConnected(L.LightningModule):
 
     def on_validation_epoch_end(self):
         val_accuracy = self._val_correct / self._val_total
-        self.log("val_acc", val_accuracy, on_step=False, on_epoch=True, prog_bar=False)
+        self.log("val_acc", val_accuracy, on_step=False, on_epoch=True, prog_bar=True)
         self._reset_count()
 
     def train_dataloader(self):
