@@ -2,6 +2,7 @@ import lightning as L
 import torch.nn.functional
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from argparse import ArgumentParser
+import pickle
 from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
@@ -51,14 +52,62 @@ def single_run(
         trainer.save_checkpoint(final_save)
 
 
-def model1_run():
-    hidden_channels = 40
+def final_run(
+        hidden_channels,
+        decode_channels,
+        hidden_layers,
+        p_dropout,
+        lr,
+        activation=nn.LeakyReLU,
+        final_activation=nn.Sigmoid,
+        batch_size=2500,
+        optimizer=optim.AdamW,
+        scheduler=optim.lr_scheduler.CosineAnnealingLR,
+        loss_fn=F.binary_cross_entropy,
+        in_channels=15,
+        out_channels=1,
+        use_wandb=True,
+        used_model=LightningFullyConnected,
+        final_save=None,
+        num_workers=8, devices=1, max_epochs=350, patience=10, refresh_rate=10,
+        dataset=ParticleDataset,
+        **kwargs
+):
+    model = used_model(in_channels, out_channels, hidden_channels, decode_channels, hidden_layers,
+                                    p_dropout, activation, final_activation, lr, batch_size, optimizer, scheduler, loss_fn)
+    train_data = dataset(**kwargs)
+    train_dataloader = DataLoader(train_data, batch_size=batch_size,
+                                  shuffle=True, num_workers=num_workers)
+
+    trainer = L.Trainer(devices=devices, accelerator="gpu",
+                        max_epochs=max_epochs,
+                        )
+    trainer.fit(model=model,
+                train_dataloaders=train_dataloader,
+                val_dataloaders=train_dataloader
+                )
+    if final_save is not None:
+        trainer.save_checkpoint(final_save)
+
+
+def model1_final_run():
+    hidden_channels = 20
     decode_channels = 6
-    hidden_layers = 20
-    p_dropout = 0.1
+    hidden_layers = 5
+    p_dropout = 0.2
+    lr = 0.0003
+    final_run(hidden_channels, decode_channels, hidden_layers, p_dropout, lr,
+               final_save="data/initial/nn_clf_final.ckpt")
+
+
+def model1_run():
+    hidden_channels = 20
+    decode_channels = 6
+    hidden_layers = 5
+    p_dropout = 0.2
     lr = 0.0003
     single_run(hidden_channels, decode_channels, hidden_layers, p_dropout, lr,
-               final_save="data/initial/model1.ckpt")
+               final_save="data/initial/model_en.ckpt")
 
 
 def model2_run():
@@ -96,7 +145,7 @@ def ae_run(**kwargs):
     trainer = L.Trainer(devices=1, accelerator="gpu",
                         max_epochs=1000,
                         callbacks=[
-                            EarlyStopping(monitor="val_loss", mode="min", patience=10),
+                            EarlyStopping(monitor="val_loss", mode="min", patience=20),
                             TQDMProgressBar(refresh_rate=10)],
                         )
     trainer.fit(model=model,
@@ -107,9 +156,10 @@ def ae_run(**kwargs):
 
 
 def main():
+    model1_final_run()
     # model1_run()
     # model2_run()
-    ae_run()
+    # ae_run()
 
 
 if __name__ == "__main__":
