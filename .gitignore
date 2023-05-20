@@ -7,4 +7,5 @@
 
 # Logging from lightning_logs
 /lightning_logs/
+
 /InitialProject/*/
