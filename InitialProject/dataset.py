@@ -96,7 +96,7 @@ class EnergyDataset(ParticleDataset):
 
     def __init__(self,
                  path=f"{APP_ML_PATH}/data/initial/train",
-                 variables_path=f"{APP_ML_PATH}/data/initial/variables.txt",
+                 variables_path=f"{APP_ML_PATH}/data/initial/regression_variables.txt",
                  target=_energy_label):
         super().__init__(path, variables_path, target)
         is_electron = self._all_data[self._electron_label]

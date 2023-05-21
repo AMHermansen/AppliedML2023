@@ -1,6 +1,7 @@
 from typing import Any
 
 import torch
+import inspect
 from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
@@ -160,8 +161,15 @@ class LightningFullyConnected(L.LightningModule):
 
     def configure_optimizers(self):
         optimizer = self.optimizer(self.parameters(), lr=self.lr)
-        lr_scheduler = self.scheduler(optimizer, T_max=10)
-        return [optimizer], [{"scheduler": lr_scheduler}]
+        if self.scheduler.__name__ == "CosineAnnealingLR":
+            lr_scheduler = self.scheduler(optimizer, T_max=10)
+        elif self.scheduler.__name__ == "LinearLR":
+            lr_scheduler = self.scheduler(optimizer)
+        elif self.scheduler.__name__ == "ReduceLROnPlateau":
+            lr_scheduler = self.scheduler(optimizer, mode="min")
+            return {"optimizer": optimizer, "lr_scheduler": {"scheduler": lr_scheduler,
+                                             "monitor": "val_loss"}}
+        return {"optimizer": optimizer, "lr_scheduelr": {"scheduler": lr_scheduler}}
 
     def _reset_count(self):
         self._val_correct = 0
